@@ -13,6 +13,8 @@ module Web.HTML.HTMLCustomElement (
 ) where
 
 import Prelude
+
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Web.HTML.HTMLElement (HTMLElement)
 
@@ -25,6 +27,7 @@ type OnAttributeChange = HTMLElement -> String -> String -> String -> Effect Uni
 type ObservedAttributes = Array String
 
 type CustomElementProperties = {
+    extends :: Maybe String,
     builder :: Builder,
     onConnected :: OnStateChange,
     onDisconnected :: OnStateChange,
@@ -47,6 +50,7 @@ defaultObservedAttributes = []
 
 defaultCustomElementProperties :: CustomElementProperties
 defaultCustomElementProperties = {
+    extends: Nothing,
     builder: defaultBuilder,
     onConnected: defaultOnStateChanged,
     onDisconnected: defaultOnStateChanged,
@@ -55,7 +59,29 @@ defaultCustomElementProperties = {
     observedAttributes: defaultObservedAttributes
 }
 
-foreign import _createCustomElement :: String 
+createCustomElement :: String -> CustomElementProperties -> Effect Unit
+createCustomElement elementName props =
+    case props.extends of
+        Just parentElementName -> _createDerivedCustomElement
+            parentElementName
+            elementName
+            props.builder
+            props.onConnected
+            props.onDisconnected
+            props.onAdopted
+            props.onAttributeChanged
+            props.observedAttributes
+        Nothing -> _createAutonomousCustomElement
+            elementName
+            props.builder
+            props.onConnected
+            props.onDisconnected
+            props.onAdopted
+            props.onAttributeChanged
+            props.observedAttributes
+
+foreign import _createDerivedCustomElement :: String
+    -> String
     -> Builder 
     -> OnStateChange 
     -> OnStateChange 
@@ -64,13 +90,11 @@ foreign import _createCustomElement :: String
     -> ObservedAttributes
     -> Effect Unit
 
-createCustomElement :: String -> CustomElementProperties -> Effect Unit
-createCustomElement elementName props = 
-    _createCustomElement 
-        elementName
-        props.builder
-        props.onConnected
-        props.onDisconnected
-        props.onAdopted
-        props.onAttributeChanged
-        props.observedAttributes
+foreign import _createAutonomousCustomElement :: String 
+    -> Builder 
+    -> OnStateChange 
+    -> OnStateChange 
+    -> OnStateChange 
+    -> OnAttributeChange
+    -> ObservedAttributes
+    -> Effect Unit
