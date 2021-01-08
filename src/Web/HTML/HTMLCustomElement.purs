@@ -1,24 +1,32 @@
 module Web.HTML.HTMLCustomElement (
-    Builder,
+    Constructor,
     OnStateChange,
     OnAttributeChange,
     ObservedAttributes,
-    CustomElementProperties,
+    CustomElementInit,
+    Method,
+    PropertyOps,
     defaultBuilder,
     defaultOnStateChanged,
     defaultOnAttributeChanged,
     defaultObservedAttributes,
-    defaultCustomElementProperties,
-    createCustomElement
+    defaultCustomElementInit,
+    createCustomElement,
+    setProperty,
+    getProperty,
+    addManagedProperty,
+    addMethod,
+    makeCustomEvent
 ) where
 
 import Prelude
 
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
+import Web.Event.CustomEvent (CustomEvent)
 import Web.HTML.HTMLElement (HTMLElement)
 
-type Builder = HTMLElement -> Effect Unit
+type Constructor = HTMLElement -> Effect Unit
 
 type OnStateChange = HTMLElement -> Effect Unit
 
@@ -26,9 +34,16 @@ type OnAttributeChange = HTMLElement -> String -> String -> String -> Effect Uni
 
 type ObservedAttributes = Array String
 
-type CustomElementProperties = {
+type Method a b = a -> HTMLElement -> Effect b
+
+type PropertyOps a = {
+    getter :: Method Unit a,
+    setter :: Method a Unit
+}
+
+type CustomElementInit = {
     extends :: Maybe String,
-    builder :: Builder,
+    constructor :: Constructor,
     onConnected :: OnStateChange,
     onDisconnected :: OnStateChange,
     onAdopted :: OnStateChange,
@@ -36,7 +51,14 @@ type CustomElementProperties = {
     observedAttributes :: ObservedAttributes
 }
 
-defaultBuilder :: Builder
+makeCustomEvent :: forall a. String -> Maybe a -> Effect CustomEvent
+makeCustomEvent name (Just detail) = _makeCustomEventWithDetail name detail
+makeCustomEvent name Nothing = _makeCustomEvent name
+
+foreign import _makeCustomEventWithDetail :: forall a. String -> a -> Effect CustomEvent
+foreign import _makeCustomEvent :: String -> Effect CustomEvent
+
+defaultBuilder :: Constructor
 defaultBuilder _ = pure unit
 
 defaultOnStateChanged :: OnStateChange
@@ -48,10 +70,10 @@ defaultOnAttributeChanged _ _ _ _ = pure unit
 defaultObservedAttributes :: ObservedAttributes
 defaultObservedAttributes = []
 
-defaultCustomElementProperties :: CustomElementProperties
-defaultCustomElementProperties = {
+defaultCustomElementInit :: CustomElementInit
+defaultCustomElementInit = {
     extends: Nothing,
-    builder: defaultBuilder,
+    constructor: defaultBuilder,
     onConnected: defaultOnStateChanged,
     onDisconnected: defaultOnStateChanged,
     onAdopted: defaultOnStateChanged,
@@ -59,13 +81,13 @@ defaultCustomElementProperties = {
     observedAttributes: defaultObservedAttributes
 }
 
-createCustomElement :: String -> CustomElementProperties -> Effect Unit
+createCustomElement :: String -> CustomElementInit -> Effect Unit
 createCustomElement elementName props =
     case props.extends of
         Just parentElementName -> _createDerivedCustomElement
             parentElementName
             elementName
-            props.builder
+            props.constructor
             props.onConnected
             props.onDisconnected
             props.onAdopted
@@ -73,16 +95,23 @@ createCustomElement elementName props =
             props.observedAttributes
         Nothing -> _createAutonomousCustomElement
             elementName
-            props.builder
+            props.constructor
             props.onConnected
             props.onDisconnected
             props.onAdopted
             props.onAttributeChanged
             props.observedAttributes
 
+foreign import setProperty :: forall a. String -> a -> HTMLElement -> Effect Unit
+foreign import getProperty :: forall a. String -> HTMLElement -> Effect a
+
+foreign import addManagedProperty :: forall a. String -> PropertyOps a -> HTMLElement -> Effect Unit
+
+foreign import addMethod :: forall a b. String -> Method a b -> HTMLElement -> Effect Unit
+
 foreign import _createDerivedCustomElement :: String
     -> String
-    -> Builder 
+    -> Constructor 
     -> OnStateChange 
     -> OnStateChange 
     -> OnStateChange 
@@ -91,7 +120,7 @@ foreign import _createDerivedCustomElement :: String
     -> Effect Unit
 
 foreign import _createAutonomousCustomElement :: String 
-    -> Builder 
+    -> Constructor 
     -> OnStateChange 
     -> OnStateChange 
     -> OnStateChange 

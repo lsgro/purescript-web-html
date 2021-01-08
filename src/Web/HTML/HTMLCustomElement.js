@@ -79,7 +79,7 @@ const elementMap = {
         
 function createCustomElementClass(
     parentElementClass,
-    builder,
+    ctor,
     onConnected,
     onDisconnected,
     onAdopted,
@@ -92,7 +92,7 @@ function createCustomElementClass(
             [],
             elementClass
         );
-        builder(self)();
+        ctor(self)();
         return self;
     }
     console.debug("Setting prototype:", parentElementClass);
@@ -122,7 +122,7 @@ function createCustomElementClass(
 
 exports._createDerivedCustomElement = function(parentElementName) {
     return function (elementName) {
-        return function (builder) {
+        return function (ctor) {
             return function (onConnected) {
                 return function (onDisconnected) {
                     return function (onAdopted) {
@@ -135,7 +135,7 @@ exports._createDerivedCustomElement = function(parentElementName) {
                                     }
                                     const elementClass = createCustomElementClass(
                                         parentElementClass,
-                                        builder,
+                                        ctor,
                                         onConnected,
                                         onDisconnected,
                                         onAdopted,
@@ -154,7 +154,7 @@ exports._createDerivedCustomElement = function(parentElementName) {
 };
 
 exports._createAutonomousCustomElement = function (elementName) {
-    return function (builder) {
+    return function (ctor) {
         return function (onConnected) {
             return function (onDisconnected) {
                 return function (onAdopted) {
@@ -163,7 +163,7 @@ exports._createAutonomousCustomElement = function (elementName) {
                             return function() {
                                 const elementClass = createCustomElementClass(
                                     HTMLElement,
-                                    builder,
+                                    ctor,
                                     onConnected,
                                     onDisconnected,
                                     onAdopted,
@@ -177,5 +177,67 @@ exports._createAutonomousCustomElement = function (elementName) {
                 };
             };
         };
+    };
+};
+
+exports.setProperty = function(name) {
+    return function(value) {
+        return function(el) {
+            return function() {
+                el[name] = value;
+            };
+        };
+    };
+};
+
+exports.getProperty = function(name) {
+    return function(el) {
+        return function() {
+            return el[name];
+        };
+    };
+};
+
+exports.addMethod = function(name) {
+    return function(method) {
+        return function(el) {
+            return function() {
+                const proto = Object.getPrototypeOf(el);
+                proto[name] = function(arg) {
+                    return method(arg)(el)();
+                };
+            };
+        };
+    };
+};
+
+exports.addManagedProperty = function(name) {
+    return function(propertyOps) {
+        return function(el) {
+            return function() {
+                Object.defineProperty(el, name, {
+                    get() {
+                        return propertyOps.getter()(el)();
+                    },
+                    set(value) {
+                        return propertyOps.setter(value)(el)();
+                    }
+                });
+            };
+        };
+    };
+};
+
+exports._makeCustomEventWithDetail = function(name) {
+    return function(detail) {
+        return function() {
+            return new CustomEvent(name, {detail: detail});
+        };
+    };
+};
+
+exports._makeCustomEvent = function(name) {
+    return function() {
+        return new Event(name);
     };
 };
